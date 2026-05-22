@@ -16,6 +16,7 @@ const SCENE_RANGE = 20;
 const SCALE_FACTOR = SCENE_RANGE / SLIDER_MAX;
 const GROUND_MIN = -64;
 const GROUND_MAX = 320;
+const MAX_PIXEL_RATIO = 2;
 
 const sliders = {};
 let hasWebGL = true;
@@ -157,11 +158,12 @@ function syncAll() {
 function init() {
     try {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
+        scene.background = new THREE.Color(0x20223a);
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(10, 20, -32);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
@@ -192,10 +194,11 @@ function init() {
         scene.add(directionalLight);
 
         drawAxes();
-        scene.add(new THREE.GridHelper(40, 40, 0x333355, 0x222244));
+        scene.add(new THREE.GridHelper(40, 40, 0x4f5591, 0x32365f));
     } catch (error) {
         console.warn('WebGL not available:', error.message);
         hasWebGL = false;
+        showWebGLFallback();
     }
 
     groundInput = document.getElementById('groundLevel');
@@ -291,7 +294,7 @@ function drawAxes() {
         );
     };
 
-    line([new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)], 0xf87171);
+    line([new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)], 0xff8a8a);
     let label = makeLabel('+X East', 'text-red-400');
     label.position.set(len, -1.5, 0);
     scene.add(label);
@@ -299,7 +302,7 @@ function drawAxes() {
     label.position.set(-len, 0, 0);
     scene.add(label);
 
-    line([new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)], 0x4ade80);
+    line([new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)], 0x5cff99);
     label = makeLabel('+Y Up', 'text-green-400');
     label.position.set(0, len, 0);
     scene.add(label);
@@ -307,13 +310,26 @@ function drawAxes() {
     label.position.set(0, -len, 0);
     scene.add(label);
 
-    line([new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)], 0x60a5fa);
+    line([new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)], 0x79b8ff);
     label = makeLabel('+Z South', 'text-blue-400');
     label.position.set(0, 2, len);
     scene.add(label);
     label = makeLabel('-Z North', 'text-blue-400');
     label.position.set(0, 0, -len);
     scene.add(label);
+}
+
+function showWebGLFallback() {
+    const fallback = document.createElement('div');
+    fallback.id = 'webgl-fallback';
+    fallback.className = 'label';
+    fallback.textContent = '3D view unavailable';
+    fallback.style.position = 'fixed';
+    fallback.style.left = '1rem';
+    fallback.style.top = '1rem';
+    fallback.style.zIndex = '2';
+    fallback.style.background = 'rgba(0, 0, 0, 0.78)';
+    document.body.appendChild(fallback);
 }
 
 function getCoordinates() {
@@ -476,6 +492,7 @@ window.addEventListener('resize', () => {
     if (!hasWebGL) return;
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     renderer.setSize(window.innerWidth, window.innerHeight);
     labelRenderer.setSize(window.innerWidth, window.innerHeight);
 });
