@@ -1,6 +1,5 @@
 node_modules/
+.DS_Store
 screenshot*.png
 screenshot.mjs
-package.json
-package-lock.json
 .claude/

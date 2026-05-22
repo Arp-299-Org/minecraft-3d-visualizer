@@ -1,0 +1,28 @@
+{
+  "name": "minecraft-3d-visualizer",
+  "version": "1.0.0",
+  "description": "A classroom visualizer for Minecraft fill command coordinates.",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run build:offline",
+    "build:offline": "node ./scripts/build-offline.mjs",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=minecraft-fill-visualizer",
+    "test": "npm run build && node ./scripts/smoke-test.mjs"
+  },
+  "keywords": [
+    "minecraft",
+    "education",
+    "makecode",
+    "coordinates",
+    "visualizer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "homepage": "https://minecraft-fill-visualizer.pages.dev",
+  "type": "commonjs",
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "playwright": "^1.58.2",
+    "three": "^0.183.2"
+  }
+}
