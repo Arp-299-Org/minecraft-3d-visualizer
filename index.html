@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Fill Command Visualizer v8</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --mc-green: #4C7A4A; --mc-green-light: #5DA65B; --mc-green-dark: #3B5E39; }
+        body { font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; background: #1a1a2e; }
+        .font-mc { font-family: 'Silkscreen', monospace; }
+        canvas { position: fixed; top: 0; left: 0; z-index: 0; }
+        .label {
+            color: #FFF; font-family: 'Silkscreen', monospace; font-size: 13px;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
+            padding: 3px 6px; background: rgba(0,0,0,0.6); border-radius: 2px;
+        }
+        .mc-border {
+            border: 3px solid #555;
+            border-top-color: #888; border-left-color: #777;
+            border-right-color: #333; border-bottom-color: #222;
+        }
+        .grass-strip {
+            height: 6px;
+            background: linear-gradient(to bottom, #5DA65B 0%, #5DA65B 50%, #8B6914 50%, #8B6914 100%);
+        }
+
+        /* Draggable number input — the core interaction */
+        .drag-num {
+            background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 3px; color: #fff; font-family: 'Silkscreen', monospace;
+            font-size: 13px; text-align: center; outline: none;
+            width: 3rem; padding: 3px 2px; cursor: ns-resize; user-select: none;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .drag-num:hover { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.2); }
+        .drag-num:focus { cursor: text; border-color: #7ddf7a; background: rgba(255,255,255,0.25); }
+        .drag-num.dragging { border-color: #7ddf7a; background: rgba(125,223,122,0.15); }
+
+        /* Panel scrolling */
+        #ui-panel { max-height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4B5563 transparent; }
+        #ui-panel::-webkit-scrollbar { width: 5px; }
+        #ui-panel::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
+    </style>
+    <script type="importmap">
+        { "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+        }}
+    </script>
+</head>
+<body class="text-white">
+
+<!-- Compact floating panel — bottom right, minimal footprint -->
+<div id="ui-panel" class="fixed bottom-3 right-3 z-10 pointer-events-auto bg-[#2a2a3e] bg-opacity-90 backdrop-blur-sm rounded-lg shadow-xl">
+
+    <!-- Title + mode -->
+    <div class="bg-[#3a3a52] px-2 py-1 flex items-center justify-between rounded-t-lg gap-2">
+        <h1 class="font-mc text-[11px] text-green-300">Fill Visualizer</h1>
+        <div class="flex items-center gap-2 text-[10px]">
+            <label class="flex items-center gap-1 text-gray-200 cursor-pointer">
+                <input type="radio" name="mode" value="world" id="modeWorld" class="accent-green-500 w-3 h-3" checked>
+                <span class="font-mc">World</span>
+            </label>
+            <label class="flex items-center gap-1 text-gray-200 cursor-pointer">
+                <input type="radio" name="mode" value="relative" id="modeRelative" class="accent-green-500 w-3 h-3">
+                <span class="font-mc">Rel</span>
+            </label>
+        </div>
+    </div>
+    <div class="grass-strip" style="height:3px;"></div>
+
+    <div class="p-2 flex flex-col gap-1.5">
+
+        <!-- Shape indicator — inline -->
+        <div id="shapeIndicator" class="mc-border px-2 py-1 text-center bg-[#333350]" style="border-width:2px;">
+            <span id="shapeLabel" class="font-mc text-sm text-white">Single Block</span>
+            <span id="shapeDesc" class="text-[10px] text-gray-300 ml-1">From and To are the same spot</span>
+        </div>
+
+        <!-- MakeCode fill block — compact -->
+        <div class="mc-border overflow-hidden" style="border-width:2px; border-color: var(--mc-green-dark); border-top-color: var(--mc-green-light); border-left-color: var(--mc-green-light);">
+
+            <div class="px-2 py-1" style="background: var(--mc-green);">
+                <span class="font-mc text-[11px] text-green-100">fill with</span>
+            </div>
+
+            <!-- Column headers -->
+            <div class="grid grid-cols-[2.5rem_2.2rem_1fr_1fr_1fr] gap-1 px-2 py-1 items-end" style="background: var(--mc-green-dark);">
+                <div></div><div></div>
+                <div class="text-center"><div class="font-mc text-[11px] text-red-400">X</div><div class="font-mc text-[9px] text-red-300">W- E+</div></div>
+                <div class="text-center"><div class="font-mc text-[11px] text-green-400">Y</div><div class="font-mc text-[9px] text-green-300">Dn- Up+</div></div>
+                <div class="text-center"><div class="font-mc text-[11px] text-blue-400">Z</div><div class="font-mc text-[9px] text-blue-300">N- S+</div></div>
+            </div>
+
+            <!-- FROM -->
+            <div class="grid grid-cols-[2.5rem_2.2rem_1fr_1fr_1fr] gap-1 px-2 py-1.5 items-center" style="background: var(--mc-green-dark);">
+                <span class="font-mc text-xs text-cyan-300">from</span>
+                <span id="mk-from-mode" class="font-mc text-[10px] text-green-300"></span>
+                <div class="flex justify-center"><span id="mk-from-x-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-from-x" type="text" inputmode="numeric" value="0" class="drag-num" data-slider="x1" /></div>
+                <div class="flex justify-center"><span id="mk-from-y-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-from-y" type="text" inputmode="numeric" value="-60" class="drag-num" data-slider="y1" data-is-y="true" /></div>
+                <div class="flex justify-center"><span id="mk-from-z-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-from-z" type="text" inputmode="numeric" value="0" class="drag-num" data-slider="z1" /></div>
+            </div>
+
+            <div class="h-[1px]" style="background: var(--mc-green);"></div>
+
+            <!-- TO -->
+            <div class="grid grid-cols-[2.5rem_2.2rem_1fr_1fr_1fr] gap-1 px-2 py-1.5 items-center" style="background: var(--mc-green-dark);">
+                <span class="font-mc text-xs text-yellow-300">to</span>
+                <span id="mk-to-mode" class="font-mc text-[10px] text-green-300"></span>
+                <div class="flex justify-center"><span id="mk-to-x-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-to-x" type="text" inputmode="numeric" value="0" class="drag-num" data-slider="x2" /></div>
+                <div class="flex justify-center"><span id="mk-to-y-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-to-y" type="text" inputmode="numeric" value="-60" class="drag-num" data-slider="y2" data-is-y="true" /></div>
+                <div class="flex justify-center"><span id="mk-to-z-prefix" class="font-mc text-[10px] text-green-300"></span><input id="mk-to-z" type="text" inputmode="numeric" value="0" class="drag-num" data-slider="z2" /></div>
+            </div>
+        </div>
+
+        <!-- Ground Y -->
+        <div id="groundRow" class="flex items-center gap-2">
+            <label for="groundLevel" class="font-mc text-[10px] text-gray-400">Ground Y:</label>
+            <input id="groundLevel" type="text" inputmode="numeric" pattern="-?[0-9]*" value="-60"
+                class="drag-num w-14" data-ground="true" />
+        </div>
+
+    </div>
+</div>
+
+<!-- Hidden range inputs — sliders are now invisible, just used as state -->
+<div style="display:none;">
+    <input type="range" id="x1" min="0" max="63" value="0">
+    <input type="range" id="y1" min="0" max="63" value="0">
+    <input type="range" id="z1" min="0" max="63" value="0">
+    <input type="range" id="x2" min="0" max="63" value="0">
+    <input type="range" id="y2" min="0" max="63" value="0">
+    <input type="range" id="z2" min="0" max="63" value="0">
+</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+    let scene, camera, renderer, labelRenderer, controls;
+    let fillGroup, gridHelper;
+    let modeRadios, groundInput, groundRow;
+    let currentMode = 'world';
+    let groundValue = -60;
+    let valueModeLabel;
+    let shapeLabel, shapeDesc, shapeIndicator;
+    let makeCodeFields = {};
+    let makeCodeModeLabels = {};
+
+    const SLIDER_MAX = 63;
+    const SCENE_RANGE = 20;
+    const SCALE_FACTOR = SCENE_RANGE / SLIDER_MAX;
+    const GROUND_MIN = -64;
+    const GROUND_MAX = 320;
+
+    const sliders = {};
+    const values = {};
+    let hasWebGL = true;
+
+    // ===== DRAG-TO-CHANGE NUMBERS =====
+    function setupDragNumbers() {
+        document.querySelectorAll('.drag-num').forEach(input => {
+            let dragging = false;
+            let startY, startVal;
+
+            input.addEventListener('mousedown', (e) => {
+                // If already focused (typing mode), don't start drag
+                if (document.activeElement === input) return;
+                e.preventDefault();
+                dragging = true;
+                startY = e.clientY;
+                startVal = parseFloat(input.value) || 0;
+                input.classList.add('dragging');
+                document.body.style.cursor = 'ns-resize';
+
+                const onMove = (e) => {
+                    if (!dragging) return;
+                    const dy = startY - e.clientY; // up = positive
+                    const sensitivity = 0.5; // pixels per unit
+                    const delta = Math.round(dy * sensitivity);
+                    const newVal = startVal + delta;
+                    applyDragValue(input, newVal);
+                };
+
+                const onUp = () => {
+                    dragging = false;
+                    input.classList.remove('dragging');
+                    document.body.style.cursor = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+
+            // Touch support for tablets/chromebooks
+            input.addEventListener('touchstart', (e) => {
+                if (document.activeElement === input) return;
+                const touch = e.touches[0];
+                dragging = true;
+                startY = touch.clientY;
+                startVal = parseFloat(input.value) || 0;
+                input.classList.add('dragging');
+
+                const onMove = (e) => {
+                    if (!dragging) return;
+                    e.preventDefault();
+                    const dy = startY - e.touches[0].clientY;
+                    const delta = Math.round(dy * 0.5);
+                    applyDragValue(input, startVal + delta);
+                };
+
+                const onEnd = () => {
+                    dragging = false;
+                    input.classList.remove('dragging');
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onEnd);
+                };
+
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend', onEnd);
+            });
+
+            // Double-click to reset to zero (or ground level for Y)
+            input.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                const isY = input.dataset.isY === 'true';
+                const resetVal = isY && currentMode === 'world' ? getGroundLevel() : 0;
+                applyDragValue(input, resetVal);
+                input.blur();
+            });
+
+            // Typing mode — click to focus, type a value
+            input.addEventListener('focus', () => { input._userEditing = true; input.select(); });
+            input.addEventListener('blur', () => {
+                input._userEditing = false;
+                // Clamp typed value
+                const parsed = parseFloat(input.value);
+                if (!isNaN(parsed)) applyDragValue(input, parsed);
+                syncAll();
+            });
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+            input.addEventListener('input', () => {
+                const parsed = parseFloat(input.value.trim());
+                if (!isNaN(parsed)) applyDragValue(input, parsed, true);
+            });
+        });
+    }
+
+    function applyDragValue(input, newVal, skipDisplayUpdate) {
+        // Ground Y input — no slider, just set groundValue directly
+        if (input.dataset.ground === 'true') {
+            const clamped = Math.min(GROUND_MAX, Math.max(GROUND_MIN, Math.round(newVal)));
+            groundValue = clamped;
+            if (!skipDisplayUpdate && !input._userEditing) input.value = clamped;
+            updateFillBox(); updateCommandPreview();
+            return;
+        }
+
+        const sliderId = input.dataset.slider;
+        const isY = input.dataset.isY === 'true';
+        const slider = sliders[sliderId];
+        if (!slider) return;
+
+        let sliderVal;
+        if (isY && currentMode === 'world') {
+            sliderVal = newVal - getGroundLevel();
+        } else {
+            sliderVal = newVal;
+        }
+
+        sliderVal = Math.max(0, Math.min(SLIDER_MAX, Math.round(sliderVal)));
+        slider.value = sliderVal;
+
+        // Update the displayed value in the input (unless user is typing)
+        if (!skipDisplayUpdate && !input._userEditing) {
+            if (isY && currentMode === 'world') {
+                input.value = Math.round((sliderVal + getGroundLevel()) * 100) / 100;
+            } else {
+                input.value = sliderVal;
+            }
+        }
+
+        updateFillBox();
+        updateCommandPreview();
+    }
+
+    function syncAll() {
+        updateFillBox();
+        updateCommandPreview();
+    }
+
+    function init() {
+        try {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(10, 20, -32);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            document.body.appendChild(labelRenderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(5, 5, 3);
+            const cv = new THREE.Vector3().subVectors(camera.position, controls.target);
+            const ipa = Math.atan2(Math.sqrt(cv.x*cv.x + cv.z*cv.z), cv.y);
+            controls.minPolarAngle = ipa;
+            controls.maxPolarAngle = ipa;
+            controls.enablePan = false;
+            controls.update();
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dl = new THREE.DirectionalLight(0xffffff, 1);
+            dl.position.set(5, 10, 7.5); scene.add(dl);
+
+            drawAxes();
+            scene.add(new THREE.GridHelper(40, 40, 0x333355, 0x222244));
+        } catch (e) { console.warn('WebGL not available:', e.message); hasWebGL = false; }
+
+        groundInput = document.getElementById('groundLevel');
+        groundRow = document.getElementById('groundRow');
+        modeRadios = document.querySelectorAll('input[name="mode"]');
+        valueModeLabel = document.getElementById('valueModeLabel');
+        shapeLabel = document.getElementById('shapeLabel');
+        shapeDesc = document.getElementById('shapeDesc');
+        shapeIndicator = document.getElementById('shapeIndicator');
+
+        makeCodeFields = {
+            from: {
+                x: { value: document.getElementById('mk-from-x'), prefix: document.getElementById('mk-from-x-prefix') },
+                y: { value: document.getElementById('mk-from-y'), prefix: document.getElementById('mk-from-y-prefix') },
+                z: { value: document.getElementById('mk-from-z'), prefix: document.getElementById('mk-from-z-prefix') }
+            },
+            to: {
+                x: { value: document.getElementById('mk-to-x'), prefix: document.getElementById('mk-to-x-prefix') },
+                y: { value: document.getElementById('mk-to-y'), prefix: document.getElementById('mk-to-y-prefix') },
+                z: { value: document.getElementById('mk-to-z'), prefix: document.getElementById('mk-to-z-prefix') }
+            }
+        };
+        makeCodeModeLabels = { from: document.getElementById('mk-from-mode'), to: document.getElementById('mk-to-mode') };
+
+        // Hidden sliders as state
+        ['x1','y1','z1','x2','y2','z2'].forEach(id => { sliders[id] = document.getElementById(id); });
+
+        const commitGround = () => {
+            if (!groundInput) return;
+            const c = clampGroundValue(groundInput.value);
+            if (c === null) groundInput.value = groundValue.toString();
+            else { groundValue = c; groundInput.value = c.toString(); }
+            syncAll();
+        };
+        if (groundInput) {
+            groundInput.addEventListener('input', () => {
+                const v = groundInput.value;
+                if (v === '' || v === '-' || v === '+') { syncAll(); return; }
+                const p = parseFloat(v); if (isNaN(p)) return;
+                groundValue = Math.min(GROUND_MAX, Math.max(GROUND_MIN, p));
+                syncAll();
+            });
+            groundInput.addEventListener('blur', commitGround);
+            groundInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { commitGround(); groundInput.blur(); } });
+        }
+        if (modeRadios) {
+            modeRadios.forEach(r => r.addEventListener('change', () => {
+                currentMode = r.value;
+                if (groundRow) groundRow.classList.toggle('hidden', currentMode !== 'world');
+                syncAll();
+            }));
+        }
+
+        setupDragNumbers();
+        syncAll();
+        animate();
+    }
+
+    function drawAxes() {
+        const len = 20.5;
+        const mkLabel = (t,c) => { const d = document.createElement('div'); d.className = `label ${c}`; d.textContent = t; return new CSS2DObject(d); };
+        const line = (pts,col) => { scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color:col, linewidth:3 }))); };
+
+        line([new THREE.Vector3(-len,0,0), new THREE.Vector3(len,0,0)], 0xf87171);
+        let l; l = mkLabel('+X East','text-red-400'); l.position.set(len,-1.5,0); scene.add(l);
+        l = mkLabel('-X West','text-red-400'); l.position.set(-len,0,0); scene.add(l);
+
+        line([new THREE.Vector3(0,-len,0), new THREE.Vector3(0,len,0)], 0x4ade80);
+        l = mkLabel('+Y Up','text-green-400'); l.position.set(0,len,0); scene.add(l);
+        l = mkLabel('-Y Down','text-green-400'); l.position.set(0,-len,0); scene.add(l);
+
+        line([new THREE.Vector3(0,0,-len), new THREE.Vector3(0,0,len)], 0x60a5fa);
+        l = mkLabel('+Z South','text-blue-400'); l.position.set(0,2,len); scene.add(l);
+        l = mkLabel('-Z North','text-blue-400'); l.position.set(0,0,-len); scene.add(l);
+    }
+
+    function getCoordinates() {
+        const g = id => { const s = sliders[id]; return s ? (parseFloat(s.value) || 0) : 0; };
+        return { x1:g('x1'), y1:g('y1'), z1:g('z1'), x2:g('x2'), y2:g('y2'), z2:g('z2') };
+    }
+    function getGroundLevel() { return groundValue; }
+    function clampGroundValue(raw) {
+        const t = (raw ?? '').toString().trim();
+        if (t === '' || t === '-' || t === '+') return null;
+        const p = parseFloat(t); if (isNaN(p)) return null;
+        return Math.min(GROUND_MAX, Math.max(GROUND_MIN, Math.round(p)));
+    }
+
+    function updateCommandPreview() {
+        const c = getCoordinates(), g = currentMode === 'world' ? getGroundLevel() : 0;
+        updateMakeCodeValues(c, g);
+        updateShapeIndicator(c);
+    }
+
+    function updateMakeCodeValues(coords, ground) {
+        if (!makeCodeFields.from) return;
+        const fmt = n => Math.round(n * 100) / 100;
+        const pfx = currentMode === 'relative' ? '~' : '';
+        const from = { x:coords.x1, y:coords.y1, z:coords.z1 }, to = { x:coords.x2, y:coords.y2, z:coords.z2 };
+        if (currentMode === 'world') { from.y += ground; to.y += ground; }
+        const modeText = currentMode === 'world' ? 'world' : '';
+        if (makeCodeModeLabels.from) makeCodeModeLabels.from.textContent = modeText;
+        if (makeCodeModeLabels.to) makeCodeModeLabels.to.textContent = modeText;
+        const set = (g,a,v) => { const f = makeCodeFields[g]?.[a]; if (!f) return; if (f.value && !f.value._userEditing) f.value.value = fmt(v); if (f.prefix) f.prefix.textContent = pfx; };
+        set('from','x',from.x); set('from','y',from.y); set('from','z',from.z);
+        set('to','x',to.x); set('to','y',to.y); set('to','z',to.z);
+    }
+
+    function updateShapeIndicator(coords) {
+        if (!shapeLabel) return;
+        const dx = Math.abs(coords.x2-coords.x1), dy = Math.abs(coords.y2-coords.y1), dz = Math.abs(coords.z2-coords.z1);
+        const dims = [dx,dy,dz].filter(d => d > 0).length;
+        let name, desc, border;
+        if (dims === 0) { name = 'Single Block'; desc = 'From and To are the same spot'; border = '#555'; }
+        else if (dims === 1) { const a = dx > 0 ? 'X' : dy > 0 ? 'Y' : 'Z'; name = 'Line'; desc = `A row of blocks along ${a}`; border = '#a78bfa'; }
+        else if (dims === 2) {
+            if (dy === 0) { name = 'Floor / Ceiling'; desc = 'Flat on the ground — no height'; }
+            else { name = 'Wall'; desc = 'Flat — like a wall with no thickness'; }
+            border = '#fbbf24';
+        } else { name = 'Box (3D)'; desc = 'Has width, height, and depth'; border = '#34d399'; }
+        shapeLabel.textContent = name;
+        shapeDesc.textContent = desc;
+        shapeIndicator.style.borderColor = border;
+    }
+
+    function updateFillBox() {
+        if (!hasWebGL) return;
+        if (fillGroup) { fillGroup.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); scene.remove(fillGroup); }
+        const c = getCoordinates();
+        const w = (Math.abs(c.x2-c.x1)+1)*SCALE_FACTOR, h = (Math.abs(c.y2-c.y1)+1)*SCALE_FACTOR, d = (Math.abs(c.z2-c.z1)+1)*SCALE_FACTOR;
+        const cx = ((c.x1+c.x2)/2)*SCALE_FACTOR, cy = ((c.y1+c.y2)/2)*SCALE_FACTOR, cz = ((c.z1+c.z2)/2)*SCALE_FACTOR;
+        fillGroup = new THREE.Group();
+        const bg = new THREE.BoxGeometry(w,h,d);
+        fillGroup.add(new THREE.Mesh(bg, new THREE.MeshPhongMaterial({ color:0x4B7A47, transparent:true, opacity:0.3, side:THREE.DoubleSide, depthWrite:false })));
+        fillGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(bg), new THREE.LineBasicMaterial({ color:0x7ddf7a, linewidth:2 })));
+        fillGroup.position.set(cx,cy,cz);
+        scene.add(fillGroup);
+    }
+
+    function animate() { if (!hasWebGL) return; requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); labelRenderer.render(scene,camera); }
+    window.addEventListener('resize', () => { if (!hasWebGL) return; camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); labelRenderer.setSize(window.innerWidth,window.innerHeight); });
+    init();
+</script>
+</body>
+</html>
