@@ -4,6 +4,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 
 let scene, camera, renderer, labelRenderer, controls;
 let fillGroup;
+let fallbackCanvas, fallbackContext;
 let modeRadios, groundInput, groundRow;
 let currentMode = 'world';
 let groundValue = -60;
@@ -17,6 +18,7 @@ const SCALE_FACTOR = SCENE_RANGE / SLIDER_MAX;
 const GROUND_MIN = -64;
 const GROUND_MAX = 320;
 const MAX_PIXEL_RATIO = 2;
+const FALLBACK_GRID_STEP = 8;
 
 const sliders = {};
 let hasWebGL = true;
@@ -320,16 +322,204 @@ function drawAxes() {
 }
 
 function showWebGLFallback() {
+    fallbackCanvas = document.createElement('canvas');
+    fallbackCanvas.id = 'fallback-canvas';
+    fallbackCanvas.setAttribute('aria-label', '2D coordinate graph');
+    fallbackCanvas.style.position = 'fixed';
+    fallbackCanvas.style.top = '0';
+    fallbackCanvas.style.left = '0';
+    fallbackCanvas.style.zIndex = '0';
+    fallbackCanvas.style.pointerEvents = 'none';
+    document.body.appendChild(fallbackCanvas);
+    fallbackContext = fallbackCanvas.getContext('2d');
+
     const fallback = document.createElement('div');
     fallback.id = 'webgl-fallback';
     fallback.className = 'label';
-    fallback.textContent = '3D view unavailable';
+    fallback.textContent = '2D view';
     fallback.style.position = 'fixed';
     fallback.style.left = '1rem';
     fallback.style.top = '1rem';
     fallback.style.zIndex = '2';
     fallback.style.background = 'rgba(0, 0, 0, 0.78)';
     document.body.appendChild(fallback);
+
+    resizeFallbackCanvas();
+    drawFallbackGraph();
+}
+
+function resizeFallbackCanvas() {
+    if (!fallbackCanvas) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    fallbackCanvas.width = Math.max(1, Math.floor(width * ratio));
+    fallbackCanvas.height = Math.max(1, Math.floor(height * ratio));
+    fallbackCanvas.style.width = `${width}px`;
+    fallbackCanvas.style.height = `${height}px`;
+    if (fallbackContext) fallbackContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+
+function getFallbackProjection() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const scale = Math.max(
+        2.8,
+        Math.min(8.5, (width * 0.42) / SLIDER_MAX, (height * 0.5) / (SLIDER_MAX * 1.4)),
+    );
+
+    return {
+        originX: width < 700 ? width * 0.5 : width * 0.36,
+        originY: height * 0.64,
+        scale,
+    };
+}
+
+function projectFallbackPoint(x, y, z, projection) {
+    return {
+        x: projection.originX + (x - z) * projection.scale * 0.85,
+        y: projection.originY + (x + z) * projection.scale * 0.42 - y * projection.scale * 0.95,
+    };
+}
+
+function drawFallbackGraph() {
+    if (!fallbackContext) return;
+
+    const ctx = fallbackContext;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const projection = getFallbackProjection();
+    const maxGraph = SLIDER_MAX + 1;
+
+    ctx.clearRect(0, 0, width, height);
+    const background = ctx.createLinearGradient(0, 0, width, height);
+    background.addColorStop(0, '#20223a');
+    background.addColorStop(1, '#111827');
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, width, height);
+
+    const marks = [];
+    for (let value = 0; value <= maxGraph; value += FALLBACK_GRID_STEP) marks.push(value);
+    if (marks[marks.length - 1] !== maxGraph) marks.push(maxGraph);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+
+    marks.forEach((value) => {
+        const major = value % 16 === 0 || value === maxGraph;
+        drawFallbackLine(ctx, projection, [value, 0, 0], [value, 0, maxGraph], {
+            color: major ? 'rgba(121, 184, 255, 0.38)' : 'rgba(121, 184, 255, 0.18)',
+            width: major ? 1.5 : 1,
+        });
+        drawFallbackLine(ctx, projection, [0, 0, value], [maxGraph, 0, value], {
+            color: major ? 'rgba(255, 138, 138, 0.38)' : 'rgba(255, 138, 138, 0.18)',
+            width: major ? 1.5 : 1,
+        });
+    });
+
+    drawFallbackLine(ctx, projection, [0, 0, 0], [maxGraph, 0, 0], { color: '#ff8a8a', width: 3 });
+    drawFallbackLine(ctx, projection, [0, 0, 0], [0, maxGraph, 0], { color: '#5cff99', width: 3 });
+    drawFallbackLine(ctx, projection, [0, 0, 0], [0, 0, maxGraph], { color: '#79b8ff', width: 3 });
+
+    drawFallbackCuboid(ctx, projection, getCoordinates());
+    drawFallbackLabel(ctx, '+X East', projectFallbackPoint(maxGraph, 0, 0, projection), '#ffb0b0', 12, -8);
+    drawFallbackLabel(ctx, '+Y Up', projectFallbackPoint(0, maxGraph, 0, projection), '#a8ffbf', 10, -8);
+    drawFallbackLabel(ctx, '+Z South', projectFallbackPoint(0, 0, maxGraph, projection), '#b3d4ff', -74, 12);
+    drawFallbackLabel(ctx, '0,0,0', projectFallbackPoint(0, 0, 0, projection), '#ffffff', -18, 20);
+
+    ctx.restore();
+}
+
+function drawFallbackLine(ctx, projection, from, to, style) {
+    const start = projectFallbackPoint(from[0], from[1], from[2], projection);
+    const end = projectFallbackPoint(to[0], to[1], to[2], projection);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = style.width;
+    ctx.stroke();
+}
+
+function drawFallbackCuboid(ctx, projection, coords) {
+    const x0 = Math.min(coords.x1, coords.x2);
+    const x1 = Math.max(coords.x1, coords.x2) + 1;
+    const y0 = Math.min(coords.y1, coords.y2);
+    const y1 = Math.max(coords.y1, coords.y2) + 1;
+    const z0 = Math.min(coords.z1, coords.z2);
+    const z1 = Math.max(coords.z1, coords.z2) + 1;
+
+    const points = {
+        a: projectFallbackPoint(x0, y0, z0, projection),
+        b: projectFallbackPoint(x1, y0, z0, projection),
+        c: projectFallbackPoint(x1, y0, z1, projection),
+        d: projectFallbackPoint(x0, y0, z1, projection),
+        e: projectFallbackPoint(x0, y1, z0, projection),
+        f: projectFallbackPoint(x1, y1, z0, projection),
+        g: projectFallbackPoint(x1, y1, z1, projection),
+        h: projectFallbackPoint(x0, y1, z1, projection),
+    };
+
+    drawFallbackFace(ctx, [points.d, points.c, points.g, points.h], 'rgba(121, 184, 255, 0.22)');
+    drawFallbackFace(ctx, [points.b, points.c, points.g, points.f], 'rgba(255, 138, 138, 0.18)');
+    drawFallbackFace(ctx, [points.e, points.f, points.g, points.h], 'rgba(92, 255, 153, 0.28)');
+
+    const edges = [
+        ['a', 'b'],
+        ['b', 'c'],
+        ['c', 'd'],
+        ['d', 'a'],
+        ['e', 'f'],
+        ['f', 'g'],
+        ['g', 'h'],
+        ['h', 'e'],
+        ['a', 'e'],
+        ['b', 'f'],
+        ['c', 'g'],
+        ['d', 'h'],
+    ];
+
+    ctx.strokeStyle = '#b9ffb6';
+    ctx.lineWidth = 2.5;
+    edges.forEach(([from, to]) => {
+        ctx.beginPath();
+        ctx.moveTo(points[from].x, points[from].y);
+        ctx.lineTo(points[to].x, points[to].y);
+        ctx.stroke();
+    });
+
+    if (x1 - x0 === 1 && y1 - y0 === 1 && z1 - z0 === 1) {
+        const center = projectFallbackPoint(x0 + 0.5, y0 + 0.5, z0 + 0.5, projection);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#d9ffd7';
+        ctx.fill();
+    }
+}
+
+function drawFallbackFace(ctx, points, fillStyle) {
+    ctx.beginPath();
+    points.forEach((point, index) => {
+        if (index === 0) {
+            ctx.moveTo(point.x, point.y);
+        } else {
+            ctx.lineTo(point.x, point.y);
+        }
+    });
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+}
+
+function drawFallbackLabel(ctx, text, point, color, offsetX = 0, offsetY = 0) {
+    const x = point.x + offsetX;
+    const y = point.y + offsetY;
+    ctx.font = '13px monospace';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
 }
 
 function getCoordinates() {
@@ -439,7 +629,10 @@ function updateShapeIndicator(coords) {
 }
 
 function updateFillBox() {
-    if (!hasWebGL) return;
+    if (!hasWebGL) {
+        drawFallbackGraph();
+        return;
+    }
     if (fillGroup) {
         fillGroup.traverse((child) => {
             if (child.geometry) child.geometry.dispose();
@@ -489,7 +682,11 @@ function animate() {
 }
 
 window.addEventListener('resize', () => {
-    if (!hasWebGL) return;
+    if (!hasWebGL) {
+        resizeFallbackCanvas();
+        drawFallbackGraph();
+        return;
+    }
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
