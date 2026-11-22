@@ -3,27 +3,62 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 let scene, camera, renderer, labelRenderer, controls;
-let fillGroup;
-let modeRadios, groundInput, groundRow;
+let fillGroup, playerGroup, facingGroup;
+let fwdArrow, leftArrow, fwdLabel, leftLabel;
+let modeRadios, groundInput, groundRow, relativeHintRow, facingRow, facingReadout;
+let keyToggleBtn, coordKeyEl, codePreviewEl, copyCodeBtn;
+let colHeads = {};
+let facingButtons = [];
+
 let currentMode = 'world';
+let currentFacing = 'N';
 let groundValue = -60;
 let shapeLabel, shapeDesc, shapeIndicator;
 let makeCodeFields = {};
 let makeCodeModeLabels = {};
 
-const SLIDER_MAX = 63;
+const WORLD_MIN = 0;
+const WORLD_MAX = 63;
+const OFFSET_MIN = -31;
+const OFFSET_MAX = 31;
 const SCENE_RANGE = 20;
-const SCALE_FACTOR = SCENE_RANGE / SLIDER_MAX;
+const SCALE_FACTOR = SCENE_RANGE / WORLD_MAX;
 const GROUND_MIN = -64;
 const GROUND_MAX = 320;
 const MAX_PIXEL_RATIO = 2;
 
+const FACING_INFO = {
+    N: 'North (-Z)',
+    E: 'East (+X)',
+    S: 'South (+Z)',
+    W: 'West (-X)',
+};
+
 const sliders = {};
 let hasWebGL = true;
+
+/** Convert MakeCode posLocal(left, up, forward) into Minecraft world offsets (X East, Y Up, Z South). */
+export function localToWorld(left, up, forward, facing) {
+    if (facing === 'E') return { x: forward, y: up, z: -left };
+    if (facing === 'S') return { x: left, y: up, z: forward };
+    if (facing === 'W') return { x: -forward, y: up, z: left };
+    return { x: -left, y: up, z: -forward };
+}
+
+function activeBounds() {
+    if (currentMode === 'world') return { min: WORLD_MIN, max: WORLD_MAX };
+    return { min: OFFSET_MIN, max: OFFSET_MAX };
+}
+
+function clampAxisValue(value) {
+    const { min, max } = activeBounds();
+    return Math.max(min, Math.min(max, Math.round(value)));
+}
 
 function setupDragNumbers() {
     document.querySelectorAll('.drag-num').forEach((input) => {
         let dragging = false;
+        let moved = false;
         let startY;
         let startVal;
 
@@ -31,6 +66,7 @@ function setupDragNumbers() {
             if (document.activeElement === input) return;
             e.preventDefault();
             dragging = true;
+            moved = false;
             startY = e.clientY;
             startVal = parseFloat(input.value) || 0;
             input.classList.add('dragging');
@@ -39,6 +75,7 @@ function setupDragNumbers() {
             const onMove = (moveEvent) => {
                 if (!dragging) return;
                 const dy = startY - moveEvent.clientY;
+                if (Math.abs(dy) >= 2) moved = true;
                 const delta = Math.round(dy * 0.5);
                 applyDragValue(input, startVal + delta);
             };
@@ -49,6 +86,7 @@ function setupDragNumbers() {
                 document.body.style.cursor = '';
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
+                if (!moved) input.focus();
             };
 
             document.addEventListener('mousemove', onMove);
@@ -85,7 +123,10 @@ function setupDragNumbers() {
         input.addEventListener('dblclick', (e) => {
             e.preventDefault();
             const isY = input.dataset.isY === 'true';
-            const resetVal = isY && currentMode === 'world' ? getGroundLevel() : 0;
+            const resetVal = input.dataset.ground === 'true'
+                ? -60
+                : (isY && currentMode === 'world' ? getGroundLevel() : 0);
+            input._userEditing = false;
             applyDragValue(input, resetVal);
             input.blur();
         });
@@ -107,7 +148,9 @@ function setupDragNumbers() {
         });
 
         input.addEventListener('input', () => {
-            const parsed = parseFloat(input.value.trim());
+            const raw = input.value.trim();
+            if (raw === '' || raw === '-' || raw === '+') return;
+            const parsed = parseFloat(raw);
             if (!Number.isNaN(parsed)) applyDragValue(input, parsed, true);
         });
     });
@@ -118,8 +161,7 @@ function applyDragValue(input, newVal, skipDisplayUpdate) {
         const clamped = Math.min(GROUND_MAX, Math.max(GROUND_MIN, Math.round(newVal)));
         groundValue = clamped;
         if (!skipDisplayUpdate && !input._userEditing) input.value = clamped;
-        updateFillBox();
-        updateCommandPreview();
+        syncAll();
         return;
     }
 
@@ -128,29 +170,71 @@ function applyDragValue(input, newVal, skipDisplayUpdate) {
     const slider = sliders[sliderId];
     if (!slider) return;
 
-    let sliderVal;
-    if (isY && currentMode === 'world') {
-        sliderVal = newVal - getGroundLevel();
-    } else {
-        sliderVal = newVal;
-    }
-
-    sliderVal = Math.max(0, Math.min(SLIDER_MAX, Math.round(sliderVal)));
-    slider.value = sliderVal;
+    const rawOffset = isY && currentMode === 'world' ? newVal - getGroundLevel() : newVal;
+    const clamped = clampAxisValue(rawOffset);
+    slider.value = clamped;
 
     if (!skipDisplayUpdate && !input._userEditing) {
         if (isY && currentMode === 'world') {
-            input.value = Math.round((sliderVal + getGroundLevel()) * 100) / 100;
+            input.value = Math.round((clamped + getGroundLevel()) * 100) / 100;
         } else {
-            input.value = sliderVal;
+            input.value = clamped;
         }
     }
 
-    updateFillBox();
-    updateCommandPreview();
+    syncAll();
+}
+
+function setMode(nextMode) {
+    if (nextMode !== 'world' && nextMode !== 'relative' && nextMode !== 'local') return;
+    currentMode = nextMode;
+    const { min, max } = activeBounds();
+
+    Object.values(sliders).forEach((slider) => {
+        if (!slider) return;
+        slider.min = String(min);
+        slider.max = String(max);
+        const cur = parseFloat(slider.value) || 0;
+        slider.value = String(Math.max(min, Math.min(max, Math.round(cur))));
+    });
+
+    if (colHeads.x) {
+        if (currentMode === 'local') {
+            colHeads.x.title.textContent = '^1';
+            colHeads.x.sub.textContent = 'R- L+';
+            colHeads.y.title.textContent = '^2';
+            colHeads.y.sub.textContent = 'Dn- Up+';
+            colHeads.z.title.textContent = '^3';
+            colHeads.z.sub.textContent = 'Bk- Fwd+';
+        } else {
+            colHeads.x.title.textContent = 'X';
+            colHeads.x.sub.textContent = 'W- E+';
+            colHeads.y.title.textContent = 'Y';
+            colHeads.y.sub.textContent = 'Dn- Up+';
+            colHeads.z.title.textContent = 'Z';
+            colHeads.z.sub.textContent = 'N- S+';
+        }
+    }
+
+    if (groundRow) groundRow.classList.toggle('hidden', currentMode !== 'world');
+    if (relativeHintRow) relativeHintRow.classList.toggle('hidden', currentMode !== 'relative');
+    if (facingRow) facingRow.classList.toggle('hidden', currentMode !== 'local');
+
+    syncAll();
+}
+
+function setFacing(nextFacing) {
+    if (!FACING_INFO[nextFacing]) return;
+    currentFacing = nextFacing;
+    facingButtons.forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.facing === nextFacing);
+    });
+    if (facingReadout) facingReadout.textContent = FACING_INFO[nextFacing];
+    syncAll();
 }
 
 function syncAll() {
+    updatePlayerAndFacing();
     updateFillBox();
     updateCommandPreview();
 }
@@ -188,13 +272,14 @@ function init() {
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
         directionalLight.position.set(5, 10, 7.5);
         scene.add(directionalLight);
 
         drawAxes();
         scene.add(new THREE.GridHelper(40, 40, 0x4f5591, 0x32365f));
+        createPlayerMarker();
     } catch (error) {
         console.warn('WebGL not available:', error.message);
         hasWebGL = false;
@@ -203,10 +288,25 @@ function init() {
 
     groundInput = document.getElementById('groundLevel');
     groundRow = document.getElementById('groundRow');
+    relativeHintRow = document.getElementById('relativeHintRow');
+    facingRow = document.getElementById('facingRow');
+    facingReadout = document.getElementById('facingReadout');
+    facingButtons = Array.from(document.querySelectorAll('.face-btn'));
     modeRadios = document.querySelectorAll('input[name="mode"]');
+    keyToggleBtn = document.getElementById('keyToggle');
+    coordKeyEl = document.getElementById('coordKey');
+    codePreviewEl = document.getElementById('codePreview');
+    copyCodeBtn = document.getElementById('copyCodeBtn');
+
     shapeLabel = document.getElementById('shapeLabel');
     shapeDesc = document.getElementById('shapeDesc');
     shapeIndicator = document.getElementById('shapeIndicator');
+
+    colHeads = {
+        x: { title: document.getElementById('col-x-title'), sub: document.getElementById('col-x-sub') },
+        y: { title: document.getElementById('col-y-title'), sub: document.getElementById('col-y-sub') },
+        z: { title: document.getElementById('col-z-title'), sub: document.getElementById('col-z-sub') },
+    };
 
     makeCodeFields = {
         from: {
@@ -243,14 +343,11 @@ function init() {
 
     if (groundInput) {
         groundInput.addEventListener('input', () => {
-            const value = groundInput.value;
-            if (value === '' || value === '-' || value === '+') {
-                syncAll();
-                return;
-            }
+            const value = groundInput.value.trim();
+            if (value === '' || value === '-' || value === '+') return;
             const parsed = parseFloat(value);
             if (Number.isNaN(parsed)) return;
-            groundValue = Math.min(GROUND_MAX, Math.max(GROUND_MIN, parsed));
+            groundValue = Math.min(GROUND_MAX, Math.max(GROUND_MIN, Math.round(parsed)));
             syncAll();
         });
         groundInput.addEventListener('blur', commitGround);
@@ -263,18 +360,137 @@ function init() {
     }
 
     if (modeRadios) {
-        modeRadios.forEach((radio) =>
-            radio.addEventListener('change', () => {
-                currentMode = radio.value;
-                if (groundRow) groundRow.classList.toggle('hidden', currentMode !== 'world');
-                syncAll();
-            }),
-        );
+        modeRadios.forEach((radio) => {
+            radio.addEventListener('change', () => setMode(radio.value));
+        });
+    }
+
+    facingButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setFacing(btn.dataset.facing));
+    });
+
+    if (keyToggleBtn && coordKeyEl) {
+        keyToggleBtn.addEventListener('click', () => {
+            const isHidden = coordKeyEl.classList.toggle('hidden');
+            keyToggleBtn.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+        });
+    }
+
+    if (copyCodeBtn && codePreviewEl) {
+        copyCodeBtn.addEventListener('click', async () => {
+            const text = codePreviewEl.textContent || '';
+            let ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    ok = true;
+                }
+            } catch {}
+            if (!ok) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    ok = document.execCommand('copy');
+                } catch {}
+                ta.remove();
+            }
+            copyCodeBtn.textContent = ok ? 'Copied' : 'Copy';
+            setTimeout(() => {
+                copyCodeBtn.textContent = 'Copy';
+            }, 1200);
+        });
     }
 
     setupDragNumbers();
-    syncAll();
+    setMode('world');
     animate();
+}
+
+function createPlayerMarker() {
+    playerGroup = new THREE.Group();
+
+    const baseRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.45, 0.62, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide }),
+    );
+    baseRing.rotation.x = -Math.PI / 2;
+    baseRing.position.y = 0.04;
+    playerGroup.add(baseRing);
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.72, 0.28),
+        new THREE.MeshPhongMaterial({ color: 0x38bdf8 }),
+    );
+    body.position.y = 0.42;
+    playerGroup.add(body);
+
+    const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.36, 0.36, 0.36),
+        new THREE.MeshPhongMaterial({ color: 0xfde68a }),
+    );
+    head.position.y = 0.98;
+    playerGroup.add(head);
+
+    facingGroup = new THREE.Group();
+    fwdArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 0, -1),
+        new THREE.Vector3(0, 0.28, 0),
+        4.4,
+        0xfde047,
+        0.85,
+        0.5,
+    );
+    leftArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0.28, 0),
+        3.2,
+        0xc4b5fd,
+        0.65,
+        0.4,
+    );
+    facingGroup.add(fwdArrow, leftArrow);
+
+    const fwdEl = document.createElement('div');
+    fwdEl.className = 'label label-local-fwd';
+    fwdEl.textContent = 'Fwd +^3';
+    fwdLabel = new CSS2DObject(fwdEl);
+
+    const leftEl = document.createElement('div');
+    leftEl.className = 'label label-local-left';
+    leftEl.textContent = 'Left +^1';
+    leftLabel = new CSS2DObject(leftEl);
+
+    facingGroup.add(fwdLabel, leftLabel);
+    playerGroup.add(facingGroup);
+    scene.add(playerGroup);
+}
+
+function updatePlayerAndFacing() {
+    if (!hasWebGL || !playerGroup) return;
+    const showPlayer = currentMode === 'relative' || currentMode === 'local';
+    const showFacing = currentMode === 'local';
+
+    playerGroup.visible = showPlayer;
+    facingGroup.visible = showFacing;
+    fwdLabel.element.classList.toggle('hidden', !showFacing);
+    leftLabel.element.classList.toggle('hidden', !showFacing);
+
+    if (!showFacing) return;
+
+    const fwd = localToWorld(0, 0, 1, currentFacing);
+    const left = localToWorld(1, 0, 0, currentFacing);
+    const fwdVec = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
+    const leftVec = new THREE.Vector3(left.x, 0, left.z).normalize();
+
+    fwdArrow.setDirection(fwdVec);
+    leftArrow.setDirection(leftVec);
+
+    fwdLabel.position.set(fwdVec.x * 5.2, 0.75, fwdVec.z * 5.2);
+    leftLabel.position.set(leftVec.x * 3.8, 0.75, leftVec.z * 3.8);
 }
 
 function drawAxes() {
@@ -365,12 +581,13 @@ function updateCommandPreview() {
     const ground = currentMode === 'world' ? getGroundLevel() : 0;
     updateMakeCodeValues(coordinates, ground);
     updateShapeIndicator(coordinates);
+    updateCodePreview(coordinates, ground);
 }
 
 function updateMakeCodeValues(coords, ground) {
     if (!makeCodeFields.from) return;
     const format = (value) => Math.round(value * 100) / 100;
-    const prefix = currentMode === 'relative' ? '~' : '';
+    const prefix = currentMode === 'relative' ? '~' : currentMode === 'local' ? '^' : '';
     const from = { x: coords.x1, y: coords.y1, z: coords.z1 };
     const to = { x: coords.x2, y: coords.y2, z: coords.z2 };
 
@@ -398,6 +615,14 @@ function updateMakeCodeValues(coords, ground) {
     setValue('to', 'z', to.z);
 }
 
+function updateCodePreview(coords, ground) {
+    if (!codePreviewEl) return;
+    const fn = currentMode === 'world' ? 'world' : currentMode === 'local' ? 'posLocal' : 'pos';
+    const y1 = currentMode === 'world' ? coords.y1 + ground : coords.y1;
+    const y2 = currentMode === 'world' ? coords.y2 + ground : coords.y2;
+    codePreviewEl.textContent = `blocks.fill(GRASS, ${fn}(${coords.x1}, ${y1}, ${coords.z1}), ${fn}(${coords.x2}, ${y2}, ${coords.z2}))`;
+}
+
 function updateShapeIndicator(coords) {
     if (!shapeLabel) return;
     const dx = Math.abs(coords.x2 - coords.x1);
@@ -414,7 +639,9 @@ function updateShapeIndicator(coords) {
         description = 'From and To are the same spot';
         borderColor = '#555';
     } else if (dimensions === 1) {
-        const axis = dx > 0 ? 'X' : dy > 0 ? 'Y' : 'Z';
+        const axis = currentMode === 'local'
+            ? (dx > 0 ? 'Left/Right (^1)' : dy > 0 ? 'Up/Down (^2)' : 'Fwd/Back (^3)')
+            : (dx > 0 ? 'X' : dy > 0 ? 'Y' : 'Z');
         name = 'Line';
         description = `A row of blocks along ${axis}`;
         borderColor = '#a78bfa';
@@ -449,12 +676,20 @@ function updateFillBox() {
     }
 
     const coords = getCoordinates();
-    const width = (Math.abs(coords.x2 - coords.x1) + 1) * SCALE_FACTOR;
-    const height = (Math.abs(coords.y2 - coords.y1) + 1) * SCALE_FACTOR;
-    const depth = (Math.abs(coords.z2 - coords.z1) + 1) * SCALE_FACTOR;
-    const centerX = ((coords.x1 + coords.x2) / 2) * SCALE_FACTOR;
-    const centerY = ((coords.y1 + coords.y2) / 2) * SCALE_FACTOR;
-    const centerZ = ((coords.z1 + coords.z2) / 2) * SCALE_FACTOR;
+    let p1 = { x: coords.x1, y: coords.y1, z: coords.z1 };
+    let p2 = { x: coords.x2, y: coords.y2, z: coords.z2 };
+
+    if (currentMode === 'local') {
+        p1 = localToWorld(coords.x1, coords.y1, coords.z1, currentFacing);
+        p2 = localToWorld(coords.x2, coords.y2, coords.z2, currentFacing);
+    }
+
+    const width = (Math.abs(p2.x - p1.x) + 1) * SCALE_FACTOR;
+    const height = (Math.abs(p2.y - p1.y) + 1) * SCALE_FACTOR;
+    const depth = (Math.abs(p2.z - p1.z) + 1) * SCALE_FACTOR;
+    const centerX = ((p1.x + p2.x) / 2) * SCALE_FACTOR;
+    const centerY = ((p1.y + p2.y) / 2) * SCALE_FACTOR;
+    const centerZ = ((p1.z + p2.z) / 2) * SCALE_FACTOR;
 
     fillGroup = new THREE.Group();
     const boxGeometry = new THREE.BoxGeometry(width, height, depth);
@@ -464,7 +699,7 @@ function updateFillBox() {
             new THREE.MeshPhongMaterial({
                 color: 0x4b7a47,
                 transparent: true,
-                opacity: 0.3,
+                opacity: 0.34,
                 side: THREE.DoubleSide,
                 depthWrite: false,
             }),

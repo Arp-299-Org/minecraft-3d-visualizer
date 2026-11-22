@@ -4,17 +4,17 @@ A classroom visualizer for Minecraft Education fill command coordinates.
 
 Live page: https://minecraft-fill-visualizer.pages.dev
 
-This tool helps students see how the numbers in a MakeCode fill block map to a 3D shape. Minecraft coordinates are powerful, but they are not especially friendly the first time students meet them: X is west/east, Y is down/up, and Z is north/south. The signs are easy to mix up, relative coordinates behave differently from world coordinates, and the ground level is often not zero.
+This tool helps students see how the numbers in a MakeCode fill block map to a 3D shape. Minecraft supports three coordinate modes that behave very differently: world coordinates (`X` west/east, `Y` down/up, `Z` north/south), compass-locked relative coordinates (`~`), and player-facing coordinates (`^` left/up/forward).
 
-The visualizer is designed as a live bridge between those ideas. Students can change the from/to coordinates and immediately see whether they are making a single block, a line, a wall, a floor/ceiling, or a 3D box. The coordinate inputs are constrained from `0` to `63` so student builds stay within a structure-block-friendly size.
+Students can switch between `World`, `~`, and `^`, rotate facing direction (`N / E / S / W`) to see `posLocal()` turn in 3D space, open the built-in plain-English coordinate key, copy the live MakeCode snippet (`world()`, `pos()`, or `posLocal()`), and watch the block volume update as they change numbers. Inputs stay constrained within a 63-block structure-friendly span.
 
 ## Classroom Purpose
 
-- Show X, Y, and Z axes with Minecraft direction labels.
-- Compare world coordinates with relative coordinates.
-- Account for a non-zero ground Y level.
-- Make the shape update live while students change the numbers.
-- Help students reason about fill blocks before they run commands in Minecraft.
+- Toggle between **World (`world`)**, **Relative (`~` / `pos`)**, and **Facing (`^` / `posLocal`)** coordinates.
+- Rotate player facing (`N / E / S / W`) in `^` mode to see `Left (+^1)`, `Up (+^2)`, and `Forward (+^3)` turn live around the player.
+- Account for a non-zero ground `Y` level (`-60` by default for flat worlds).
+- Copy the matching MakeCode JavaScript (`blocks.fill(...)`) directly from the live preview.
+- Keep a compact plain-English `? Key` one click away without leaving the 3D scene.
 
 ## Privacy
 
@@ -34,7 +34,7 @@ Build the self-contained site:
 npm run build
 ```
 
-Run the browser smoke test:
+Run the Playwright browser smoke test:
 
 ```bash
 npm test
