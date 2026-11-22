@@ -14,7 +14,7 @@ Students can switch between `World`, `~`, and `^`, rotate facing direction (`N /
 - Rotate player facing (`N / E / S / W`) in `^` mode to see `Left (+)`, `Up (+)`, and `Forward (+)` turn live around the player.
 - Account for a non-zero ground `Y` level (`-60` by default for flat worlds).
 - Copy the matching MakeCode JavaScript (`blocks.fill(...)`) directly from the live preview.
-- Keep a compact plain-English `? Key` one click away without leaving the 3D scene.
+- Keep a compact plain-English `? Key` with clickable examples one click away without leaving the 3D scene.
 
 ## Privacy
 

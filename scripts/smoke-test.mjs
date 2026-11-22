@@ -42,6 +42,9 @@ try {
     if (await page.locator('#brand-corner').isHidden()) {
         throw new Error('Expected #brand-corner to be visible.');
     }
+    if ((await page.locator('#brand-corner .preset-btn').count()) !== 0) {
+        throw new Error('Expected zero preset buttons in #brand-corner.');
+    }
 
     // World mode test
     await page.fill('#mk-to-x', '12');
@@ -96,7 +99,19 @@ try {
     const readout = await page.locator('#facingReadout').textContent();
     if (!readout?.includes('East')) throw new Error(`Expected "East" in #facingReadout; got "${readout}".`);
 
-    // Preset tests
+    // ? Key toggle open, check Examples inside, click presets, and close
+    if (!(await page.locator('#coordKey').isHidden())) {
+        throw new Error('Expected #coordKey to start hidden.');
+    }
+    await page.locator('#keyToggle').click();
+    if (await page.locator('#coordKey').isHidden()) {
+        throw new Error('Expected #coordKey to become visible after clicking ? Key.');
+    }
+    const openKeyText = await page.locator('#coordKey').textContent();
+    if (!openKeyText?.includes('Examples')) {
+        throw new Error(`Expected "Examples" inside #coordKey; got "${openKeyText}".`);
+    }
+
     await page.locator('#presetLocal').click();
     const localPresetShape = await page.locator('#shapeLabel').textContent();
     const localPresetCode = await page.locator('#codePreview').textContent();
@@ -113,14 +128,6 @@ try {
         throw new Error(`Unexpected Wall preset code: "${wallPresetCode}".`);
     }
 
-    // ? Key toggle open & close
-    if (!(await page.locator('#coordKey').isHidden())) {
-        throw new Error('Expected #coordKey to start hidden.');
-    }
-    await page.locator('#keyToggle').click();
-    if (await page.locator('#coordKey').isHidden()) {
-        throw new Error('Expected #coordKey to become visible after clicking ? Key.');
-    }
     await page.locator('#keyToggle').click();
     if (!(await page.locator('#coordKey').isHidden())) {
         throw new Error('Expected #coordKey to close after clicking ? Key again.');

@@ -6,7 +6,6 @@ let scene, camera, renderer, labelRenderer, controls;
 let fillGroup, playerGroup, facingGroup;
 let fwdArrow, leftArrow, fwdLabel, leftLabel;
 let compassLabels = [];
-let backdropClouds = [];
 let modeRadios, groundInput, groundRow, relativeHintRow, facingRow, facingReadout;
 let keyToggleBtn, coordKeyEl, codePreviewEl, copyCodeBtn;
 let colHeads = {};
@@ -316,7 +315,6 @@ function init() {
 
         drawAxes();
         scene.add(new THREE.GridHelper(40, 40, 0x5b63a8, 0x343966));
-        createBackdropClouds();
         createPlayerMarker();
     } catch (error) {
         console.warn('WebGL not available:', error.message);
@@ -453,30 +451,6 @@ function init() {
     setupDragNumbers();
     setMode('world');
     animate();
-}
-
-function createBackdropClouds() {
-    const cloudMat = new THREE.MeshBasicMaterial({
-        color: 0xe2e8f0,
-        transparent: true,
-        opacity: 0.065,
-        depthWrite: false,
-        fog: false,
-    });
-    const specs = [
-        [-34, 24, 34, 10, 1.4, 5],
-        [-8, 28, 42, 13, 1.6, 6],
-        [24, 25, 30, 9, 1.3, 5],
-        [-28, 26, -34, 11, 1.4, 5],
-        [14, 29, -42, 14, 1.6, 6],
-        [38, 23, -22, 8, 1.2, 4],
-    ];
-    specs.forEach(([x, y, z, w, h, d]) => {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloudMat);
-        mesh.position.set(x, y, z);
-        scene.add(mesh);
-        backdropClouds.push(mesh);
-    });
 }
 
 function createPlayerMarker() {
@@ -833,10 +807,6 @@ function updateFillBox() {
 function animate() {
     if (!hasWebGL) return;
     requestAnimationFrame(animate);
-    for (const cloud of backdropClouds) {
-        cloud.position.x += 0.002;
-        if (cloud.position.x > 55) cloud.position.x = -55;
-    }
     controls.update();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);

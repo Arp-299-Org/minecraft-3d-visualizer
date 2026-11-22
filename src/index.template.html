@@ -48,16 +48,13 @@
         .text-green-400 { color: #4ade80; }
         .text-blue-400 { color: #60a5fa; }
 
-        /* Minimal top-left title + 1-click showcase presets */
+        /* Minimal top-left title lockup */
         #brand-corner {
             position: fixed;
             top: 14px;
             left: 16px;
             z-index: 10;
             pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
         .brand-lockup {
             display: flex;
@@ -84,27 +81,38 @@
             opacity: 0.85;
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
         }
+        .key-examples {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 6px;
+            margin-top: 2px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .key-examples-label {
+            font-weight: 700;
+            color: #ffffff;
+            font-size: 11px;
+        }
         .preset-row {
-            pointer-events: auto;
             display: flex;
             flex-wrap: wrap;
             gap: 5px;
         }
         .preset-btn {
             border: 1px solid var(--border-subtle);
-            background: rgba(24, 27, 46, 0.72);
+            background: rgba(255, 255, 255, 0.08);
             color: #e2e8f0;
-            border-radius: 5px;
-            padding: 4px 9px;
+            border-radius: 4px;
+            padding: 3px 8px;
             font-size: 11px;
             cursor: pointer;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
             transition: border-color 0.12s, background 0.12s;
         }
         .preset-btn:hover {
-            background: rgba(46, 52, 84, 0.88);
-            border-color: rgba(134, 239, 172, 0.55);
+            background: rgba(93, 166, 91, 0.25);
+            border-color: rgba(134, 239, 172, 0.6);
             color: #ffffff;
         }
 
@@ -397,11 +405,6 @@
             <p class="brand-sub">MakeCode Fill &amp; Axis Explorer</p>
         </div>
     </div>
-    <div class="preset-row" aria-label="Example presets">
-        <button type="button" id="presetWall" class="preset-btn">Wall</button>
-        <button type="button" id="presetRoom" class="preset-btn">3D Room</button>
-        <button type="button" id="presetLocal" class="preset-btn">In Front (^)</button>
-    </div>
 </div>
 
 <div id="ui-panel">
@@ -432,6 +435,14 @@
         <p><strong>Relative (<code>~</code> / <code>pos</code>):</strong> Starts where you stand (<code>~0 ~0 ~0</code>) and stays locked to the compass (+X East, +Y Up, +Z South).</p>
         <p><strong>Facing (<code>^</code> / <code>posLocal</code>):</strong> Starts where you stand and turns with you (Left+, Up+, Forward+). Pick N / E / S / W below to turn.</p>
         <p><strong>Tip:</strong> Drag any number up or down, click to type, or double-click to reset.</p>
+        <div class="key-examples">
+            <span class="key-examples-label">Examples:</span>
+            <div class="preset-row" aria-label="Examples">
+                <button type="button" id="presetWall" class="preset-btn">Wall</button>
+                <button type="button" id="presetRoom" class="preset-btn">3D Room</button>
+                <button type="button" id="presetLocal" class="preset-btn">In Front (^)</button>
+            </div>
+        </div>
     </div>
 
     <div class="panel-body">
