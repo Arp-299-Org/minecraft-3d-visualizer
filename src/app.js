@@ -205,12 +205,12 @@ function setMode(nextMode) {
 
     if (colHeads.x) {
         if (currentMode === 'local') {
-            colHeads.x.title.textContent = 'Left/Right';
-            colHeads.x.sub.textContent = 'R- L+';
-            colHeads.y.title.textContent = 'Up/Down';
-            colHeads.y.sub.textContent = 'Dn- Up+';
-            colHeads.z.title.textContent = 'Fwd/Back';
-            colHeads.z.sub.textContent = 'Bk- Fwd+';
+            colHeads.x.title.textContent = 'Right/Left';
+            colHeads.x.sub.textContent = '- / +';
+            colHeads.y.title.textContent = 'Down/Up';
+            colHeads.y.sub.textContent = '- / +';
+            colHeads.z.title.textContent = 'Back/Fwd';
+            colHeads.z.sub.textContent = '- / +';
         } else {
             colHeads.x.title.textContent = 'X';
             colHeads.x.sub.textContent = 'W- E+';

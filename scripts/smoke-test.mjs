@@ -77,10 +77,15 @@ try {
     }
     const localPrefix = await page.locator('#mk-from-x-prefix').textContent();
     const colXTitle = await page.locator('#col-x-title').textContent();
+    const colXSub = await page.locator('#col-x-sub').textContent();
+    const colYTitle = await page.locator('#col-y-title').textContent();
+    const colYSub = await page.locator('#col-y-sub').textContent();
     const colZTitle = await page.locator('#col-z-title').textContent();
+    const colZSub = await page.locator('#col-z-sub').textContent();
     if (localPrefix !== '^') throw new Error(`Expected "^" prefix; got "${localPrefix}".`);
-    if (colXTitle !== 'Left/Right') throw new Error(`Expected "Left/Right"; got "${colXTitle}".`);
-    if (colZTitle !== 'Fwd/Back') throw new Error(`Expected "Fwd/Back"; got "${colZTitle}".`);
+    if (colXTitle !== 'Right/Left' || colXSub !== '- / +') throw new Error(`Unexpected X header: "${colXTitle}" / "${colXSub}".`);
+    if (colYTitle !== 'Down/Up' || colYSub !== '- / +') throw new Error(`Unexpected Y header: "${colYTitle}" / "${colYSub}".`);
+    if (colZTitle !== 'Back/Fwd' || colZSub !== '- / +') throw new Error(`Unexpected Z header: "${colZTitle}" / "${colZSub}".`);
 
     const sceneLabels = await page.locator('.label').allTextContents();
     if (!sceneLabels.includes('Forward (+)') || !sceneLabels.includes('Left (+)')) {
