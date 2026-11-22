@@ -39,6 +39,10 @@ try {
     const canvasCount = await page.locator('canvas').count();
     if (canvasCount < 1) throw new Error('Expected a rendered 3D canvas.');
 
+    if (await page.locator('#brand-corner').isHidden()) {
+        throw new Error('Expected #brand-corner to be visible.');
+    }
+
     // World mode test
     await page.fill('#mk-to-x', '12');
     await page.locator('#mk-to-x').dispatchEvent('input');
@@ -63,27 +67,51 @@ try {
         throw new Error(`Expected pos(-5, 0, 0) in preview; got "${relPreview}".`);
     }
 
-    // Facing (^) mode + East rotation test
+    // Facing (^) mode + plain-English labels + East rotation test
     await page.locator('#modeLocal').click();
     if (await page.locator('#facingRow').isHidden()) {
         throw new Error('Expected #facingRow to be visible in ^ mode.');
     }
     const localPrefix = await page.locator('#mk-from-x-prefix').textContent();
-    const colXSub = await page.locator('#col-x-sub').textContent();
-    const colZSub = await page.locator('#col-z-sub').textContent();
+    const colXTitle = await page.locator('#col-x-title').textContent();
+    const colZTitle = await page.locator('#col-z-title').textContent();
     if (localPrefix !== '^') throw new Error(`Expected "^" prefix; got "${localPrefix}".`);
-    if (colXSub !== 'R- L+') throw new Error(`Expected "R- L+"; got "${colXSub}".`);
-    if (colZSub !== 'Bk- Fwd+') throw new Error(`Expected "Bk- Fwd+"; got "${colZSub}".`);
-    const localPreview = await page.locator('#codePreview').textContent();
-    if (!localPreview?.includes('posLocal(')) {
-        throw new Error(`Expected posLocal( in preview; got "${localPreview}".`);
+    if (colXTitle !== 'Left/Right') throw new Error(`Expected "Left/Right"; got "${colXTitle}".`);
+    if (colZTitle !== 'Fwd/Back') throw new Error(`Expected "Fwd/Back"; got "${colZTitle}".`);
+
+    const sceneLabels = await page.locator('.label').allTextContents();
+    if (!sceneLabels.includes('Forward (+)') || !sceneLabels.includes('Left (+)')) {
+        throw new Error(`Expected Forward (+) and Left (+) 3D labels; got ${JSON.stringify(sceneLabels)}`);
+    }
+    if (sceneLabels.some((t) => /\^\d/.test(t))) {
+        throw new Error(`Unexpected ^1/^2/^3 text in 3D labels: ${JSON.stringify(sceneLabels)}`);
+    }
+
+    const keyText = await page.locator('#coordKey').textContent();
+    if (/\^\d/.test(keyText || '')) {
+        throw new Error(`Unexpected ^1/^2/^3 text inside #coordKey: ${keyText}`);
     }
 
     await page.locator('[data-facing="E"]').click();
     const readout = await page.locator('#facingReadout').textContent();
     if (!readout?.includes('East')) throw new Error(`Expected "East" in #facingReadout; got "${readout}".`);
-    const eastActive = await page.locator('[data-facing="E"]').evaluate((el) => el.classList.contains('active'));
-    if (!eastActive) throw new Error('Expected East facing button to have .active class.');
+
+    // Preset tests
+    await page.locator('#presetLocal').click();
+    const localPresetShape = await page.locator('#shapeLabel').textContent();
+    const localPresetCode = await page.locator('#codePreview').textContent();
+    if (localPresetShape !== 'Box (3D)') throw new Error(`Expected Box (3D) for In Front preset; got "${localPresetShape}".`);
+    if (!localPresetCode?.includes('posLocal(-4, 0, 4), posLocal(4, 6, 10)')) {
+        throw new Error(`Unexpected In Front preset code: "${localPresetCode}".`);
+    }
+
+    await page.locator('#presetWall').click();
+    const wallPresetShape = await page.locator('#shapeLabel').textContent();
+    const wallPresetCode = await page.locator('#codePreview').textContent();
+    if (wallPresetShape !== 'Wall') throw new Error(`Expected Wall for Wall preset; got "${wallPresetShape}".`);
+    if (!wallPresetCode?.includes('world(0, -60, 0), world(14, -52, 0)')) {
+        throw new Error(`Unexpected Wall preset code: "${wallPresetCode}".`);
+    }
 
     // ? Key toggle open & close
     if (!(await page.locator('#coordKey').isHidden())) {

@@ -5,6 +5,8 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 let scene, camera, renderer, labelRenderer, controls;
 let fillGroup, playerGroup, facingGroup;
 let fwdArrow, leftArrow, fwdLabel, leftLabel;
+let compassLabels = [];
+let backdropClouds = [];
 let modeRadios, groundInput, groundRow, relativeHintRow, facingRow, facingReadout;
 let keyToggleBtn, coordKeyEl, codePreviewEl, copyCodeBtn;
 let colHeads = {};
@@ -190,6 +192,10 @@ function setMode(nextMode) {
     currentMode = nextMode;
     const { min, max } = activeBounds();
 
+    const radioMap = { world: 'modeWorld', relative: 'modeRelative', local: 'modeLocal' };
+    const activeRadio = document.getElementById(radioMap[nextMode]);
+    if (activeRadio) activeRadio.checked = true;
+
     Object.values(sliders).forEach((slider) => {
         if (!slider) return;
         slider.min = String(min);
@@ -200,11 +206,11 @@ function setMode(nextMode) {
 
     if (colHeads.x) {
         if (currentMode === 'local') {
-            colHeads.x.title.textContent = '^1';
+            colHeads.x.title.textContent = 'Left/Right';
             colHeads.x.sub.textContent = 'R- L+';
-            colHeads.y.title.textContent = '^2';
+            colHeads.y.title.textContent = 'Up/Down';
             colHeads.y.sub.textContent = 'Dn- Up+';
-            colHeads.z.title.textContent = '^3';
+            colHeads.z.title.textContent = 'Fwd/Back';
             colHeads.z.sub.textContent = 'Bk- Fwd+';
         } else {
             colHeads.x.title.textContent = 'X';
@@ -233,20 +239,51 @@ function setFacing(nextFacing) {
     syncAll();
 }
 
+function setSliderValues(vals) {
+    Object.entries(vals).forEach(([key, val]) => {
+        if (sliders[key]) sliders[key].value = String(val);
+    });
+}
+
+function applyPreset(name) {
+    document.querySelectorAll('.drag-num').forEach((inp) => {
+        inp._userEditing = false;
+    });
+
+    if (name === 'wall') {
+        setMode('world');
+        setSliderValues({ x1: 0, y1: 0, z1: 0, x2: 14, y2: 8, z2: 0 });
+    } else if (name === 'room') {
+        setMode('world');
+        setSliderValues({ x1: 0, y1: 0, z1: 0, x2: 10, y2: 6, z2: 8 });
+    } else if (name === 'local') {
+        setMode('local');
+        setFacing('E');
+        setSliderValues({ x1: -4, y1: 0, z1: 4, x2: 4, y2: 6, z2: 10 });
+    }
+    syncAll();
+}
+
 function syncAll() {
     updatePlayerAndFacing();
     updateFillBox();
     updateCommandPreview();
+    if (hasWebGL && renderer && labelRenderer && scene && camera) {
+        renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
+    }
 }
 
 function init() {
     try {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x20223a);
+        scene.fog = new THREE.FogExp2(0x171b33, 0.011);
+
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(10, 20, -32);
 
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setClearColor(0x000000, 0);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -278,7 +315,8 @@ function init() {
         scene.add(directionalLight);
 
         drawAxes();
-        scene.add(new THREE.GridHelper(40, 40, 0x4f5591, 0x32365f));
+        scene.add(new THREE.GridHelper(40, 40, 0x5b63a8, 0x343966));
+        createBackdropClouds();
         createPlayerMarker();
     } catch (error) {
         console.warn('WebGL not available:', error.message);
@@ -369,6 +407,13 @@ function init() {
         btn.addEventListener('click', () => setFacing(btn.dataset.facing));
     });
 
+    const presetWall = document.getElementById('presetWall');
+    const presetRoom = document.getElementById('presetRoom');
+    const presetLocal = document.getElementById('presetLocal');
+    if (presetWall) presetWall.addEventListener('click', () => applyPreset('wall'));
+    if (presetRoom) presetRoom.addEventListener('click', () => applyPreset('room'));
+    if (presetLocal) presetLocal.addEventListener('click', () => applyPreset('local'));
+
     if (keyToggleBtn && coordKeyEl) {
         keyToggleBtn.addEventListener('click', () => {
             const isHidden = coordKeyEl.classList.toggle('hidden');
@@ -410,6 +455,30 @@ function init() {
     animate();
 }
 
+function createBackdropClouds() {
+    const cloudMat = new THREE.MeshBasicMaterial({
+        color: 0xe2e8f0,
+        transparent: true,
+        opacity: 0.065,
+        depthWrite: false,
+        fog: false,
+    });
+    const specs = [
+        [-34, 24, 34, 10, 1.4, 5],
+        [-8, 28, 42, 13, 1.6, 6],
+        [24, 25, 30, 9, 1.3, 5],
+        [-28, 26, -34, 11, 1.4, 5],
+        [14, 29, -42, 14, 1.6, 6],
+        [38, 23, -22, 8, 1.2, 4],
+    ];
+    specs.forEach(([x, y, z, w, h, d]) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloudMat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+        backdropClouds.push(mesh);
+    });
+}
+
 function createPlayerMarker() {
     playerGroup = new THREE.Group();
 
@@ -440,7 +509,7 @@ function createPlayerMarker() {
         new THREE.Vector3(0, 0, -1),
         new THREE.Vector3(0, 0.28, 0),
         4.4,
-        0xfde047,
+        0x60a5fa,
         0.85,
         0.5,
     );
@@ -448,7 +517,7 @@ function createPlayerMarker() {
         new THREE.Vector3(-1, 0, 0),
         new THREE.Vector3(0, 0.28, 0),
         3.2,
-        0xc4b5fd,
+        0xf87171,
         0.65,
         0.4,
     );
@@ -456,12 +525,12 @@ function createPlayerMarker() {
 
     const fwdEl = document.createElement('div');
     fwdEl.className = 'label label-local-fwd';
-    fwdEl.textContent = 'Fwd +^3';
+    fwdEl.textContent = 'Forward (+)';
     fwdLabel = new CSS2DObject(fwdEl);
 
     const leftEl = document.createElement('div');
     leftEl.className = 'label label-local-left';
-    leftEl.textContent = 'Left +^1';
+    leftEl.textContent = 'Left (+)';
     leftLabel = new CSS2DObject(leftEl);
 
     facingGroup.add(fwdLabel, leftLabel);
@@ -479,6 +548,10 @@ function updatePlayerAndFacing() {
     fwdLabel.element.classList.toggle('hidden', !showFacing);
     leftLabel.element.classList.toggle('hidden', !showFacing);
 
+    compassLabels.forEach((lbl) => {
+        lbl.element.classList.toggle('label-world-dim', showFacing);
+    });
+
     if (!showFacing) return;
 
     const fwd = localToWorld(0, 0, 1, currentFacing);
@@ -495,11 +568,14 @@ function updatePlayerAndFacing() {
 
 function drawAxes() {
     const len = 20.5;
-    const makeLabel = (text, colorClass) => {
+    compassLabels = [];
+    const makeLabel = (text, colorClass, isCompass) => {
         const div = document.createElement('div');
         div.className = `label ${colorClass}`;
         div.textContent = text;
-        return new CSS2DObject(div);
+        const obj = new CSS2DObject(div);
+        if (isCompass) compassLabels.push(obj);
+        return obj;
     };
     const line = (points, color) => {
         scene.add(
@@ -511,26 +587,26 @@ function drawAxes() {
     };
 
     line([new THREE.Vector3(-len, 0, 0), new THREE.Vector3(len, 0, 0)], 0xff8a8a);
-    let label = makeLabel('+X East', 'text-red-400');
+    let label = makeLabel('+X East', 'text-red-400', true);
     label.position.set(len, -1.5, 0);
     scene.add(label);
-    label = makeLabel('-X West', 'text-red-400');
+    label = makeLabel('-X West', 'text-red-400', true);
     label.position.set(-len, 0, 0);
     scene.add(label);
 
     line([new THREE.Vector3(0, -len, 0), new THREE.Vector3(0, len, 0)], 0x5cff99);
-    label = makeLabel('+Y Up', 'text-green-400');
+    label = makeLabel('+Y Up', 'text-green-400', false);
     label.position.set(0, len, 0);
     scene.add(label);
-    label = makeLabel('-Y Down', 'text-green-400');
+    label = makeLabel('-Y Down', 'text-green-400', false);
     label.position.set(0, -len, 0);
     scene.add(label);
 
     line([new THREE.Vector3(0, 0, -len), new THREE.Vector3(0, 0, len)], 0x79b8ff);
-    label = makeLabel('+Z South', 'text-blue-400');
+    label = makeLabel('+Z South', 'text-blue-400', true);
     label.position.set(0, 2, len);
     scene.add(label);
-    label = makeLabel('-Z North', 'text-blue-400');
+    label = makeLabel('-Z North', 'text-blue-400', true);
     label.position.set(0, 0, -len);
     scene.add(label);
 }
@@ -542,7 +618,7 @@ function showWebGLFallback() {
     fallback.textContent = '3D view unavailable';
     fallback.style.position = 'fixed';
     fallback.style.left = '1rem';
-    fallback.style.top = '1rem';
+    fallback.style.top = '5rem';
     fallback.style.zIndex = '2';
     fallback.style.background = 'rgba(0, 0, 0, 0.78)';
     document.body.appendChild(fallback);
@@ -640,7 +716,7 @@ function updateShapeIndicator(coords) {
         borderColor = '#555';
     } else if (dimensions === 1) {
         const axis = currentMode === 'local'
-            ? (dx > 0 ? 'Left/Right (^1)' : dy > 0 ? 'Up/Down (^2)' : 'Fwd/Back (^3)')
+            ? (dx > 0 ? 'Left/Right' : dy > 0 ? 'Up/Down' : 'Forward/Back')
             : (dx > 0 ? 'X' : dy > 0 ? 'Y' : 'Z');
         name = 'Line';
         description = `A row of blocks along ${axis}`;
@@ -693,31 +769,74 @@ function updateFillBox() {
 
     fillGroup = new THREE.Group();
     const boxGeometry = new THREE.BoxGeometry(width, height, depth);
-    fillGroup.add(
-        new THREE.Mesh(
-            boxGeometry,
-            new THREE.MeshPhongMaterial({
-                color: 0x4b7a47,
-                transparent: true,
-                opacity: 0.34,
-                side: THREE.DoubleSide,
-                depthWrite: false,
-            }),
-        ),
+    const fillMesh = new THREE.Mesh(
+        boxGeometry,
+        new THREE.MeshPhongMaterial({
+            color: 0x4b7a47,
+            transparent: true,
+            opacity: 0.34,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+        }),
     );
-    fillGroup.add(
-        new THREE.LineSegments(
-            new THREE.EdgesGeometry(boxGeometry),
-            new THREE.LineBasicMaterial({ color: 0x7ddf7a, linewidth: 2 }),
-        ),
+    fillMesh.position.set(centerX, centerY, centerZ);
+
+    const edgeLines = new THREE.LineSegments(
+        new THREE.EdgesGeometry(boxGeometry),
+        new THREE.LineBasicMaterial({ color: 0x7ddf7a, linewidth: 2 }),
     );
-    fillGroup.position.set(centerX, centerY, centerZ);
+    edgeLines.position.set(centerX, centerY, centerZ);
+    fillGroup.add(fillMesh, edgeLines);
+
+    const minY = Math.min(p1.y, p2.y);
+    const maxY = Math.max(p1.y, p2.y);
+    if (minY > 0 || maxY < 0) {
+        const boxBottomY = centerY - height / 2;
+        const boxTopY = centerY + height / 2;
+        const anchorY = minY > 0 ? boxBottomY : boxTopY;
+        const minX = centerX - width / 2;
+        const maxX = centerX + width / 2;
+        const minZ = centerZ - depth / 2;
+        const maxZ = centerZ + depth / 2;
+
+        const footprintGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(minX, 0.03, minZ),
+            new THREE.Vector3(maxX, 0.03, minZ),
+            new THREE.Vector3(maxX, 0.03, maxZ),
+            new THREE.Vector3(minX, 0.03, maxZ),
+            new THREE.Vector3(minX, 0.03, minZ),
+        ]);
+        fillGroup.add(
+            new THREE.Line(
+                footprintGeo,
+                new THREE.LineBasicMaterial({ color: 0x7ddf7a, transparent: true, opacity: 0.48 }),
+            ),
+        );
+
+        const guidePoints = [
+            new THREE.Vector3(minX, anchorY, minZ), new THREE.Vector3(minX, 0.03, minZ),
+            new THREE.Vector3(maxX, anchorY, minZ), new THREE.Vector3(maxX, 0.03, minZ),
+            new THREE.Vector3(maxX, anchorY, maxZ), new THREE.Vector3(maxX, 0.03, maxZ),
+            new THREE.Vector3(minX, anchorY, maxZ), new THREE.Vector3(minX, 0.03, maxZ),
+        ];
+        fillGroup.add(
+            new THREE.LineSegments(
+                new THREE.BufferGeometry().setFromPoints(guidePoints),
+                new THREE.LineBasicMaterial({ color: 0x7ddf7a, transparent: true, opacity: 0.28 }),
+            ),
+        );
+    }
+
     scene.add(fillGroup);
 }
 
 function animate() {
     if (!hasWebGL) return;
     requestAnimationFrame(animate);
+    for (const cloud of backdropClouds) {
+        cloud.position.x += 0.002;
+        if (cloud.position.x > 55) cloud.position.x = -55;
+    }
     controls.update();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);

@@ -11,7 +11,7 @@ Students can switch between `World`, `~`, and `^`, rotate facing direction (`N /
 ## Classroom Purpose
 
 - Toggle between **World (`world`)**, **Relative (`~` / `pos`)**, and **Facing (`^` / `posLocal`)** coordinates.
-- Rotate player facing (`N / E / S / W`) in `^` mode to see `Left (+^1)`, `Up (+^2)`, and `Forward (+^3)` turn live around the player.
+- Rotate player facing (`N / E / S / W`) in `^` mode to see `Left (+)`, `Up (+)`, and `Forward (+)` turn live around the player.
 - Account for a non-zero ground `Y` level (`-60` by default for flat worlds).
 - Copy the matching MakeCode JavaScript (`blocks.fill(...)`) directly from the live preview.
 - Keep a compact plain-English `? Key` one click away without leaving the 3D scene.
