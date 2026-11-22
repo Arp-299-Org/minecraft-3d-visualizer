@@ -291,14 +291,15 @@
         }
         .mc-grid-heads { align-items: end; padding-bottom: 3px; }
         .col-head { text-align: center; }
-        .col-title { font-size: 10px; font-weight: 700; white-space: nowrap; }
-        .col-sub { font-size: 9px; opacity: 0.9; white-space: nowrap; }
+        .col-title { font-size: 11px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+        .col-sub { font-size: 9px; opacity: 0.92; line-height: 1.25; white-space: nowrap; }
+        .col-sign { font-size: 9px; opacity: 0.72; line-height: 1.15; white-space: nowrap; }
         .col-x .col-title { color: #f87171; }
-        .col-x .col-sub { color: #fca5a5; }
+        .col-x .col-sub, .col-x .col-sign { color: #fca5a5; }
         .col-y .col-title { color: #4ade80; }
-        .col-y .col-sub { color: #86efac; }
+        .col-y .col-sub, .col-y .col-sign { color: #86efac; }
         .col-z .col-title { color: #60a5fa; }
-        .col-z .col-sub { color: #93c5fd; }
+        .col-z .col-sub, .col-z .col-sign { color: #93c5fd; }
         .row-label-from { font-size: 12px; color: #67e8f9; font-weight: 700; }
         .row-label-to { font-size: 12px; color: #fde047; font-weight: 700; }
         .mode-tag { font-size: 10px; color: #86efac; }
@@ -432,8 +433,8 @@
 
     <div id="coordKey" class="coord-key hidden">
         <p><strong>World (<code>world</code>):</strong> Fixed spot on the map. Does not move with you. Flat-world grass is usually <code>Y = -60</code>.</p>
-        <p><strong>Relative (<code>~</code> / <code>pos</code>):</strong> Starts where you stand (<code>~0 ~0 ~0</code>) and stays locked to the compass (+X East, +Y Up, +Z South).</p>
-        <p><strong>Facing (<code>^</code> / <code>posLocal</code>):</strong> Starts where you stand and turns with you (Right/Left, Down/Up, Back/Fwd as - / +). Pick N / E / S / W below to turn.</p>
+        <p><strong>Relative (<code>~</code> / <code>pos</code>):</strong> Starts where you stand (<code>~0 ~0 ~0</code>) and stays locked to the compass (X West/East, Y Down/Up, Z North/South as - / +).</p>
+        <p><strong>Facing (<code>^</code> / <code>posLocal</code>):</strong> Starts where you stand and turns with you (X Right/Left, Y Down/Up, Z Back/Fwd as - / +). Pick N / E / S / W below to turn.</p>
         <p><strong>Tip:</strong> Drag any number up or down, click to type, or double-click to reset.</p>
         <div class="key-examples">
             <span class="key-examples-label">Examples:</span>
@@ -458,9 +459,9 @@
 
             <div class="mc-grid mc-grid-heads">
                 <div></div><div></div>
-                <div class="col-head col-x"><div id="col-x-title" class="font-mc col-title">X</div><div id="col-x-sub" class="font-mc col-sub">W- E+</div></div>
-                <div class="col-head col-y"><div id="col-y-title" class="font-mc col-title">Y</div><div id="col-y-sub" class="font-mc col-sub">Dn- Up+</div></div>
-                <div class="col-head col-z"><div id="col-z-title" class="font-mc col-title">Z</div><div id="col-z-sub" class="font-mc col-sub">N- S+</div></div>
+                <div class="col-head col-x"><div id="col-x-title" class="font-mc col-title">X</div><div id="col-x-sub" class="font-mc col-sub">West/East</div><div class="font-mc col-sign">- / +</div></div>
+                <div class="col-head col-y"><div id="col-y-title" class="font-mc col-title">Y</div><div id="col-y-sub" class="font-mc col-sub">Down/Up</div><div class="font-mc col-sign">- / +</div></div>
+                <div class="col-head col-z"><div id="col-z-title" class="font-mc col-title">Z</div><div id="col-z-sub" class="font-mc col-sub">North/South</div><div class="font-mc col-sign">- / +</div></div>
             </div>
 
             <div class="mc-grid">

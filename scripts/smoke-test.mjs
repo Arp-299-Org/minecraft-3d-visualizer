@@ -47,6 +47,20 @@ try {
     }
 
     // World mode test
+    const worldXTitle = await page.locator('#col-x-title').textContent();
+    const worldXSub = await page.locator('#col-x-sub').textContent();
+    const worldYTitle = await page.locator('#col-y-title').textContent();
+    const worldYSub = await page.locator('#col-y-sub').textContent();
+    const worldZTitle = await page.locator('#col-z-title').textContent();
+    const worldZSub = await page.locator('#col-z-sub').textContent();
+    const signLabels = await page.locator('.col-sign').allTextContents();
+    if (worldXTitle !== 'X' || worldXSub !== 'West/East') throw new Error(`Unexpected world X header: "${worldXTitle}" / "${worldXSub}".`);
+    if (worldYTitle !== 'Y' || worldYSub !== 'Down/Up') throw new Error(`Unexpected world Y header: "${worldYTitle}" / "${worldYSub}".`);
+    if (worldZTitle !== 'Z' || worldZSub !== 'North/South') throw new Error(`Unexpected world Z header: "${worldZTitle}" / "${worldZSub}".`);
+    if (signLabels.length !== 3 || signLabels.some((s) => s !== '- / +')) {
+        throw new Error(`Expected 3 "- / +" sign rows; got ${JSON.stringify(signLabels)}`);
+    }
+
     await page.fill('#mk-to-x', '12');
     await page.locator('#mk-to-x').dispatchEvent('input');
     const worldShape = await page.locator('#shapeLabel').textContent();
@@ -83,9 +97,9 @@ try {
     const colZTitle = await page.locator('#col-z-title').textContent();
     const colZSub = await page.locator('#col-z-sub').textContent();
     if (localPrefix !== '^') throw new Error(`Expected "^" prefix; got "${localPrefix}".`);
-    if (colXTitle !== 'Right/Left' || colXSub !== '- / +') throw new Error(`Unexpected X header: "${colXTitle}" / "${colXSub}".`);
-    if (colYTitle !== 'Down/Up' || colYSub !== '- / +') throw new Error(`Unexpected Y header: "${colYTitle}" / "${colYSub}".`);
-    if (colZTitle !== 'Back/Fwd' || colZSub !== '- / +') throw new Error(`Unexpected Z header: "${colZTitle}" / "${colZSub}".`);
+    if (colXTitle !== 'X' || colXSub !== 'Right/Left') throw new Error(`Unexpected X header: "${colXTitle}" / "${colXSub}".`);
+    if (colYTitle !== 'Y' || colYSub !== 'Down/Up') throw new Error(`Unexpected Y header: "${colYTitle}" / "${colYSub}".`);
+    if (colZTitle !== 'Z' || colZSub !== 'Back/Fwd') throw new Error(`Unexpected Z header: "${colZTitle}" / "${colZSub}".`);
 
     const sceneLabels = await page.locator('.label').allTextContents();
     if (!sceneLabels.includes('Forward (+)') || !sceneLabels.includes('Left (+)')) {

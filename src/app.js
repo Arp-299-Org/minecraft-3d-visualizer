@@ -204,20 +204,17 @@ function setMode(nextMode) {
     });
 
     if (colHeads.x) {
+        colHeads.x.title.textContent = 'X';
+        colHeads.y.title.textContent = 'Y';
+        colHeads.z.title.textContent = 'Z';
         if (currentMode === 'local') {
-            colHeads.x.title.textContent = 'Right/Left';
-            colHeads.x.sub.textContent = '- / +';
-            colHeads.y.title.textContent = 'Down/Up';
-            colHeads.y.sub.textContent = '- / +';
-            colHeads.z.title.textContent = 'Back/Fwd';
-            colHeads.z.sub.textContent = '- / +';
+            colHeads.x.sub.textContent = 'Right/Left';
+            colHeads.y.sub.textContent = 'Down/Up';
+            colHeads.z.sub.textContent = 'Back/Fwd';
         } else {
-            colHeads.x.title.textContent = 'X';
-            colHeads.x.sub.textContent = 'W- E+';
-            colHeads.y.title.textContent = 'Y';
-            colHeads.y.sub.textContent = 'Dn- Up+';
-            colHeads.z.title.textContent = 'Z';
-            colHeads.z.sub.textContent = 'N- S+';
+            colHeads.x.sub.textContent = 'West/East';
+            colHeads.y.sub.textContent = 'Down/Up';
+            colHeads.z.sub.textContent = 'North/South';
         }
     }
 
